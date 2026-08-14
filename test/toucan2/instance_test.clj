@@ -219,6 +219,11 @@
         (is (= 2
                (count m)))))))
 
+(deftest ^:parallel count-test
+  (is (= 0 (count (instance/instance :wow {}))))
+  (is (= 2 (count (instance/instance :wow {:a 100, :b 200}))))
+  (is (= 3 (count (instance/instance :wow {:a 100, :b 200, :c 300})))))
+
 (deftest ^:parallel create-test
   (testing "Should be able to create a map with varargs"
     (is (= {:db-id 1}

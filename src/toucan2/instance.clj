@@ -114,6 +114,9 @@
         (assoc this k v)
         this)))
 
+  (count [_this]
+    (count m))
+
   (equiv [_this another]
     (cond
       (clojure.core/instance? toucan2.protocols.IModel another)
