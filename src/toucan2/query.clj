@@ -20,11 +20,14 @@
         :expr-column (s/cat :expr   any?
                             :column (s/? keyword?))))
 
+(s/def ::default-args.modelable.columns
+  (s/* (s/nonconforming ::default-args.modelable.column)))
+
 (s/def ::default-args.modelable
   (s/or
    :modelable         (complement sequential?)
    :modelable-columns (s/cat :modelable some? ; can't have a nil model. Or can you?
-                             :columns   (s/* (s/nonconforming ::default-args.modelable.column)))))
+                             :columns   ::default-args.modelable.columns)))
 
 ;;; TODO -- can we use [[s/every-kv]] for this stuff?
 (s/def ::default-args.kv-args
@@ -88,6 +91,38 @@
         (validate-parsed-args parsed)
         parsed))))
 
+(defn- parse-default-args
+  "Parse `unparsed-args` according to `::default-args` spec, handrolled for performance. See documentation
+  for [[parse-args]] for more details."
+  [query-type unparsed-args]
+  (u/try-with-error-context ["parse args" {::query-type query-type, ::unparsed-args unparsed-args}]
+    (log/debugf "Parse args for query type %s %s" query-type unparsed-args)
+    (let [[connectable args] (if (= (first unparsed-args) :conn)
+                               [(second unparsed-args) (drop 2 unparsed-args)]
+                               [nil unparsed-args])
+          [modelable & args] args
+          [modelable columns] (if (sequential? modelable)
+                                (let [column-args (rest modelable)
+                                      columns (s/conform ::default-args.modelable.columns column-args)]
+                                  (when (s/invalid? columns)
+                                    (throw (ex-info (format "Don't know how to interpret %s modelable columns: %s"
+                                                            (pr-str query-type)
+                                                            (s/explain-str ::default-args.modelable.columns column-args))
+                                                      (s/explain-data ::default-args.modelable.columns column-args))))
+                                  [(first modelable) (not-empty columns)])
+                                [modelable nil])
+          [kv-args queryable] (if (odd? (count args))
+                                [(butlast args) (last args)]
+                                [args {}])
+          parsed (cond-> {:modelable modelable
+                          :queryable queryable}
+                   (seq kv-args) (assoc :kv-args (apply hash-map kv-args))
+                   connectable (assoc :connectable connectable)
+                   columns (assoc :columns columns))]
+      (log/debugf "Parsed => %s" parsed)
+      (validate-parsed-args parsed)
+      parsed)))
+
 (m/defmulti parse-args
   "`parse-args` takes a sequence of unparsed args passed to something like [[toucan2.select/select]] and parses them into
   a parsed args map. The default implementation uses [[clojure.spec.alpha]] to parse the args according to `args-spec`.
@@ -116,7 +151,7 @@
 (m/defmethod parse-args :default
   "The default implementation calls [[parse-args-with-spec]] with the `:toucan2.query/default-args` spec."
   [query-type unparsed-args]
-  (parse-args-with-spec query-type ::default-args unparsed-args))
+  (parse-default-args query-type unparsed-args))
 
 
 ;;;; Part of the default [[pipeline/build]] for maps: applying key-value args

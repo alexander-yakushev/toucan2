@@ -21,7 +21,9 @@
     [:conn :db :model :query]      {:connectable :db, :modelable :model, :queryable :query}
     [:conn :db [:model]]           {:connectable :db, :modelable :model, :queryable {}}
     [:conn :db [:model :a] :query] {:connectable :db, :modelable :model, :columns [:a], :queryable :query}
-    [:conn :db :model :id 1]       {:connectable :db, :modelable :model, :kv-args {:id 1}, :queryable {}}))
+    [:conn :db :model :id 1]       {:connectable :db, :modelable :model, :kv-args {:id 1}, :queryable {}})
+
+  (is (thrown? clojure.lang.ExceptionInfo (query/parse-args :default [[:model 1 2 3]]))))
 
 (derive ::venues.compound-pk ::test/venues)
 
